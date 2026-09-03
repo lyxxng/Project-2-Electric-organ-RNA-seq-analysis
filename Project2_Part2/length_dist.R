@@ -21,7 +21,7 @@ ggplot(A, aes(x = Length, y = log(Frequency), color = Read)) +
   theme_bw() +
   theme(plot.title = element_text(hjust = 0.5))
 
-ggsave("Cco_com12_SM_adult_1_Plot", device = "png", width = 8, height = 5)
+ggsave("Cco_com12_SM_adult_1_Plot.png", device = "png", width = 8, height = 5)
 
 B = bind_rows("R1" = B1, "R2" = B2, .id = "Read")
 
@@ -34,3 +34,5 @@ ggplot(B, aes(x = Length, y = log(Frequency), color = Read)) +
   scale_color_manual(values = c("R1" = "darkseagreen", "R2" = "pink")) +
   theme_bw() +
   theme(plot.title = element_text(hjust = 0.5))
+
+ggsave("Cco_com12_SM_adult_2_Plot.png", device = "png", width = 8, height = 5)
