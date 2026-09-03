@@ -151,3 +151,12 @@ po/*~
 rsconnect/
 
 SRR*
+
+# Slurm output log files
+slurm_out/
+
+# STAR database
+Campylomormyrus_compressirostris.STAR_2.7.11b/
+
+# downloaded campy files
+Cco/
