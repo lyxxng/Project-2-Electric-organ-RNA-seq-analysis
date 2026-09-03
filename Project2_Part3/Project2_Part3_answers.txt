@@ -1,0 +1,47 @@
+===== Number of mapped and unmapped reads from each SAM file =====
+Cco_com12_SM_adult_1 (SRR25630373)
+    - Mapped reads: 6,008,428
+    - Unmapped reads: 1,005,376
+Cco_com12_SM_adult_2 (SRR25630374)
+    - Mapped reads: 57,121,136
+    - Unmapped reads: 9,611,316
+
+===== Percent of reads that mapped to a feature =====
+Cco_com12_SM_adult_1 (SRR25630373) with stranded=yes
+    - Reads mapped to feature: 121,074
+    - Total number of reads: 3,506,902
+    - Percent of reads mapped: 3.45%
+Cco_com12_SM_adult_1 (SRR25630373) with stranded=reverse
+    - Reads mapped to feature: 1,967,723
+    - Total number of reads: 3,506,902
+    - Percent of reads mapped: 56.11%
+
+Cco_com12_SM_adult_2 (SRR25630374) with stranded=yes
+    - Reads mapped to feature: 1,207,191
+    - Total number of reads: 33,366,226
+    - Percent of reads mapped: 3.62%
+Cco_com12_SM_adult_2 (SRR25630374) with stranded=reverse
+    - Reads mapped to feature: 18,679,644
+    - Total number of reads: 33,366,226
+    - Percent of reads mapped: 55.98%
+
+Commands run:
+$ cat htseq_count_0373_stranded.txt | awk '{num += $2} END {print(num)}'
+3506902
+$ cat htseq_count_0373_stranded.txt | awk '$1!~"__" {num += $2} END {print(num)}'
+121074
+$ cat htseq_count_0373_reverse.txt | awk '$1!~"__" {num += $2} END {print(num)}'
+1967723
+
+$ cat htseq_count_0374_stranded.txt | awk '{num += $2} END {print(num)}'
+33366226
+$ cat htseq_count_0374_stranded.txt | awk '$1!~"__" {num += $2} END {print(num)}'
+1207191
+$ cat htseq_count_0374_reverse.txt | awk '$1!~"__" {num += $2} END {print(num)}'
+18679644
+
+I propose that these data are strand-specific RNA-Seq libraries, because the percentage
+of reads mapped to a feature varies between --stranded=yes and --stranded=revers.
+Moreover, for both Cco_com12_SM_adult_1 and Cco_com12_SM_adult_2, --stranded=reverse
+is the appropriate stranded parameter, because for both around 3.5% of the reads are
+mapped with stranded=yes, versus around 56% of reads for --stranded=reverse.
