@@ -11,6 +11,19 @@ editor_options:
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
+```{r}
+library(edgeR)
+library(limma)
+library(Glimma)
+library(ggplot2)
+library(RColorBrewer)
+library(DESeq2)
+library(ashr)
+library(pheatmap)
+library(PoiClaClu)
+library(glmpca)
+```
+
 ### Project 2 parts 4 and 5 overall: 75 points
 
 Include any code that you used to solve the question as well as the
@@ -58,7 +71,8 @@ other packages, but we cannot guarantee support for other packages.
     expression between the electric organ and skeletal muscle. Write the
     null hypothesis for this goal below.
 
-[Write the null hypothesis here]
+There is no significant difference in gene expression between the
+electric organ and skeletal muscle in the *Campylomormyrus* genus.
 
 1.  Load your data into DESeq2
 
@@ -73,9 +87,16 @@ other packages, but we cannot guarantee support for other packages.
 
 ```{r}
 #Include your commands, remember that you might not need to load all of the count files for this hypothesis
+campy_meta = read.csv("RNAseq_metadata_campy.csv")
+campy_meta = campy_meta %>%
+  filter(AgeSize == "adult")
+
+Campy = DESeqDataSetFromHTSeqCount(campy_meta, directory = "counts_tar", design = ~ SpeciesSmaller + Tissue + SpeciesSmaller:Tissue)
 ```
 
-[Explain the logic behind your design formula]
+I chose my design formula because I want to test the effect of tissue
+(electric organ vs skeletal muscle), controlling for the effect of
+species.
 
 2.  Filter the dataset to remove genes that are lowly expressed
 
@@ -86,9 +107,14 @@ other packages, but we cannot guarantee support for other packages.
 
 ```{r}
 #Include your commands
+campy_cpm = cpm(Campy)
+thresh = campy_cpm > 0.05
+keep <- rowSums(thresh) >= 2
+Campy = Campy[keep,]
 ```
 
-[Specify which approach you chose and why]
+I used the cpm approach for filtering, since it is the traditional
+approach.
 
 3.  Normalize the dataset and run differential expression analysis
 
@@ -98,6 +124,7 @@ other packages, but we cannot guarantee support for other packages.
 
 ```{r}
 #Include your commands
+Campy = DESeq(Campy)
 ```
 
 4.  Normalize the data to use for dimensionality reduction
@@ -108,9 +135,13 @@ other packages, but we cannot guarantee support for other packages.
 
 ```{r}
 #Include your commands
+campy_rld = rlog(Campy, blind = FALSE)
 ```
 
-[Write a description on the rlog transformation]
+The rlog transformation stabilizes the variance across the mean, so that
+methods such as PCA are not dominated by genes with high counts.
+According to the DESeq workflow, rlog works well on small datasets with
+a wide range of sequencing depth, which is what we have.
 
 5.  Identify distances between samples using sample distance heatmaps
 
@@ -125,16 +156,36 @@ other packages, but we cannot guarantee support for other packages.
 Note: You may need to install the packages “pheatmap” and “RColorBrewer”
 to follow along. If R tells you to restart your session listen to it.
 
-```{r}
+```{r, fig.height=7}
 #Include your commands for generating the Euclidean distance heatmap and dendrogram with the rlog data
+sampleDists = dist(t(assay(campy_rld)))
+
+sampleDistMatrix = as.matrix(sampleDists)
+rownames(sampleDistMatrix) = paste(campy_rld$Tissue, campy_rld$SRRfile, sep = " - ")
+colnames(sampleDistMatrix) = NULL
+colors = colorRampPalette(rev(brewer.pal(9, "Blues")))(255)
+pheatmap(sampleDistMatrix,
+         clustering_distance_rows = sampleDists,
+         clustering_distance_cols = sampleDists,
+         col = colors)
 ```
 
-```{r}
-#Include your commands for generating the Poisson distance heatmap with dendrogram using your original count matrix
+```{r, fig.height=7}
+poisd = PoissonDistance(t(counts(Campy)))
+
+samplePoisDistMatrix <- as.matrix(poisd$dd)
+rownames(samplePoisDistMatrix) <- paste(Campy$Tissue, Campy$SRRfile, sep=" - " )
+colnames(samplePoisDistMatrix) <- NULL
+pheatmap(samplePoisDistMatrix,
+         clustering_distance_rows = poisd$dd,
+         clustering_distance_cols = poisd$dd,
+         col = colors)
 ```
 
-[Describe the two heatmaps and what they are measuring (Any outliers? Do
-the plots have the same interpretation?)]
+The two heatmaps are measuring sample-to-sample distance. The fist is
+using Euclidean distance, and the second is using Poisson distance. Both
+plots seem to suggest that SRR25630366 may be an outlier, since it is
+not grouped with the correct tissue.
 
 6.  Examine similarity in sample global gene expression using PCA,
     Generalized PCA, and MDS plots.
@@ -146,23 +197,72 @@ the plots have the same interpretation?)]
 - Briefly describe each approach and their findings.
 
 ```{r}
-#Include commands on generating PCA, generalized PCA, and MDS plots
+pcaData = plotPCA(campy_rld, intgroup = c("Tissue", "SpeciesSmaller"), returnData = TRUE)
+percentVar = round(100 * attr(pcaData, "percentVar"))
+
+ggplot(pcaData, aes(x = PC1, y = PC2, color = Tissue, shape = SpeciesSmaller)) +
+  geom_point(size = 3) +
+  xlab(paste0("PC1: ", percentVar[1], "% variance")) +
+  ylab(paste0("PC2: ", percentVar[2], "% variance")) +
+  coord_fixed() +
+  ggtitle("Campylomormyrus electrical organ vs skeletal muscle PCA")
 ```
 
-[Describe appropriateness of methods, their approaches, and their
-findings]
+```{r}
+gpca = glmpca(counts(Campy), L = 2)
+gpca.dat = gpca$factors
+gpca.dat$Tissue = Campy$Tissue
+gpca.dat$SpeciesSmaller = Campy$SpeciesSmaller
+
+ggplot(gpca.dat, aes(x = dim1, y = dim2, color = Tissue, shape = SpeciesSmaller)) +
+  geom_point(size = 3) +
+  coord_fixed() +
+  ggtitle("Generalized PCA")
+```
+
+```{r}
+mds = as.data.frame(colData(campy_rld)) %>%
+  cbind(cmdscale(sampleDistMatrix))
+ggplot(mds, aes(x = `1`, y = `2`, color = Tissue, shape = SpeciesSmaller)) +
+  geom_point(size = 3) +
+  coord_fixed() +
+  ggtitle("MDS using rlog")
+```
+
+These figures appear to reject the null hypothesis, since there is a
+clear distinction between the two tissue types, showing evidence that
+there is a difference in gene expression between the electric organ and
+skeletal muscle in the *Campylomormyrus* genus. In terms of the methods,
+I am curious why the authors did not hybridize Crh and Cts. I also
+recall from the JC presentation that one of their samples was old.
 
 7.  Use your dimensionality reduction plots, evaluate sample quality and
     complete quality adjustments.
 
 - Based on your dimensionality reduction plots, do you have concerns
   about any samples? Explain.
+
 - If so, remove them now, repeat steps of loading in data, filtering,
   normalization, and running the differential expression analysis.
 
-[Describe your answer. If you identify a problem, then include the code
-used to repeat the initial data loading, filtering, normalization, and
-DE steps]
+  It seem like one of the samples was mislabeled (i.e., was an EO tissue
+  sample but was labeled as SM), since it clustered with the rest of the
+  EO samples in all three plots but is supposedly an SM sample. This
+  sample also shows up in the heat maps and has SRR file SRR25630366.
+
+```{r}
+campy_meta_f = campy_meta %>%
+  filter(SRRfile != "SRR25630366")
+
+Campy_f = DESeqDataSetFromHTSeqCount(campy_meta_f, directory = "counts_tar", design = ~ SpeciesSmaller + Tissue + SpeciesSmaller:Tissue)
+
+campy_cpm_f = cpm(Campy_f)
+thresh_f = campy_cpm_f > 0.05
+keep_f <- rowSums(thresh_f) >= 2
+Campy_f = Campy_f[keep_f,]
+
+Campy_f = DESeq(Campy_f)
+```
 
 8.  Identify genes that are differentially expressed between SM and EO
     tissues in EVERY species comparison.
@@ -184,19 +284,157 @@ DE steps]
     logfold changes
 
 ```{r}
-## YOUR CODE HERE
+resultsNames(Campy_f)
+
+Campy_Cco_SMvsEO_results = data.frame(lfcShrink(
+  Campy_f,
+  coef = "Tissue_SM_vs_EO",
+  type = "ashr"
+  )) %>%
+  rownames_to_column(var = "genes") %>%
+  filter(padj < 0.05) %>%
+  filter(abs(log2FoldChange) > 1) %>%
+  dplyr::rename(
+    "Cco_log2FoldChange" = "log2FoldChange",
+    "Cco_pvalue_adj" = "padj"
+  ) %>%
+  dplyr::select(genes, Cco_log2FoldChange, Cco_pvalue_adj)
+
+Campy_Crh_SMvsEO_results = data.frame(lfcShrink(
+  Campy_f,
+  type = "ashr",
+  contrast = list(c("Tissue_SM_vs_EO", "SpeciesSmallerCrh.TissueSM"))
+  )) %>%
+  rownames_to_column(var = "genes") %>%
+  filter(padj < 0.05) %>%
+  filter(abs(log2FoldChange) > 1) %>%
+  dplyr::rename(
+    "Crh_log2FoldChange" = "log2FoldChange",
+    "Crh_pvalue_adj" = "padj"
+  ) %>%
+  dplyr::select(genes, Crh_log2FoldChange, Crh_pvalue_adj)
+
+Campy_Cto_SMvsEO_results = data.frame(lfcShrink(
+  Campy_f,
+  type = "ashr",
+  contrast = list(c("Tissue_SM_vs_EO", "SpeciesSmallerCts.TissueSM"))
+)) %>%
+  rownames_to_column(var = "genes") %>%
+  filter(padj < 0.05) %>%
+  filter(abs(log2FoldChange) > 1) %>%
+  dplyr::rename(
+    "Cts_log2FoldChange" = "log2FoldChange",
+    "Cts_pvalue_adj" = "padj"
+  ) %>%
+  dplyr::select(genes, Cts_log2FoldChange, Cts_pvalue_adj)
+
+Campy_CcoxCts_SMvsEO_results = data.frame(lfcShrink(
+  Campy_f,
+  type = "ashr",
+  contrast = list(c("Tissue_SM_vs_EO", "SpeciesSmallerCcoxCts.TissueSM"))
+)) %>%
+  rownames_to_column(var = "genes") %>%
+  filter(padj < 0.05) %>%
+  filter(abs(log2FoldChange) > 1) %>%
+  dplyr::rename(
+    "CcoxCts_log2FoldChange" = "log2FoldChange",
+    "CcoxCts_pvalue_adj" = "padj"
+  ) %>%
+  dplyr::select(genes, CcoxCts_log2FoldChange, CcoxCts_pvalue_adj)
+
+Campy_CcoxCrh_SMvsEO_results = data.frame(lfcShrink(
+  Campy_f,
+  type = "ashr",
+  contrast = list(c("Tissue_SM_vs_EO", "SpeciesSmallerCcoxCrh.TissueSM"))
+)) %>%
+  rownames_to_column(var = "genes") %>%
+  filter(padj < 0.05) %>%
+  filter(abs(log2FoldChange) > 1) %>%
+  dplyr::rename(
+    "CcoxCrh_log2FoldChange" = "log2FoldChange",
+    "CcoxCrh_pvalue_adj" = "padj"
+  ) %>%
+  dplyr::select(genes, CcoxCrh_log2FoldChange, CcoxCrh_pvalue_adj)
+```
+
+```{r}
+joined_results = Campy_Cco_SMvsEO_results %>%
+  inner_join(Campy_Cto_SMvsEO_results) %>%
+  inner_join(Campy_Crh_SMvsEO_results) %>%
+  inner_join(Campy_CcoxCrh_SMvsEO_results) %>%
+  inner_join(Campy_CcoxCts_SMvsEO_results)
+  
+campy_results = joined_results %>%
+  group_by(genes) %>%
+  summarize(
+    avg_log2FC = mean(c_across(ends_with("log2FoldChange"))),
+    avg_pval = mean(c_across(ends_with("pvalue_adj")))
+  )
+
+alpha = 0.01
+campy_results$sig = -log10(campy_results$avg_pval)
+campy_results[is.infinite(campy_results$sig), "sig"] = 350
+
+genes.to.plot = !is.na(campy_results$avg_pval)
+
+cols <- densCols(campy_results$avg_log2FC, campy_results$sig)
+cols[campy_results$avg_pval ==0] <- "purple"
+campy_results$pch <- 19
+campy_results$pch[campy_results$avg_pval ==0] <- 6
+plot(-campy_results$avg_log2FC, 
+     campy_results$sig, 
+     col=cols, panel.first=grid(),
+     main="Volcano plot (right is up in EO, left up in SM)", 
+     xlab="Effect size: -log2(fold-change)",
+     ylab="-log10(adjusted p-value)",
+     pch=campy_results$pch, cex=0.4)
+abline(v=0)
+abline(v=c(-1,1), col="brown")
+abline(h=-log10(alpha), col="brown")
 ```
 
 9.  Visualize individual candidates
 
 - Using the DEG dataframe from above, report out the top five candidates
   with the lowest average adjusted p-value.
+
+  The top five candidates:
+
+  1.  maker-ptg000555l-snap-gene-1.19-mRNA-1
+  2.  maker-ptg001270l-snap-gene-47.16-mRNA-1
+  3.  maker-ptg000070l-snap-gene-5.18-mRNA-1
+  4.  snap_masked-ptg000102l-processed-gene-12.45-mRNA-1
+  5.  maker-ptg000361l-snap-gene-40.32-mRNA-1
+
 - Using the DEG dataframe from above, visualize the normalized counts
   for the gene with the highest log2FC in the SM. Also, make a plot for
   the top candidate for the EO.
 
 ```{r}
-## YOUR CODE HERE
+# Top candidate for SM: snap_masked-ptg001143l-processed-gene-2.56-mRNA-1
+# Top candidate for EO: maker-ptg000521l-snap-gene-0.25-mRNA-1
+
+plotCounts(
+  Campy_f,
+  "snap_masked-ptg001143l-processed-gene-2.56-mRNA-1",
+  intgroup = "Tissue",
+  normalized = TRUE,
+  col = Campy_f$Tissue,
+  xlab = "Tissue Type",
+  main = "Top SM: snap_masked-ptg001143l-processed-gene-2.56-mRNA-1"
+)
+```
+
+```{r}
+plotCounts(
+  Campy_f,
+  "maker-ptg000521l-snap-gene-0.25-mRNA-1",
+  intgroup = "Tissue",
+  normalized = TRUE,
+  col = Campy_f$Tissue,
+  xlab = "Tissue Type",
+  main = "Top EO: maker-ptg000521l-snap-gene-0.25-mRNA-1"
+)
 ```
 
 10. Using the DESeq LRT test, evaluate whether there is an association
@@ -228,7 +466,8 @@ DE steps]
 
 - Isolate a gene list for the cluster of interest
 - Convert Campy gene names to D. rerio gene names using the orthology
-  table derived from our ICA2 Genespace assignment (Danio_Campylomormyrus_1to1_orthologs_table.csv)
+  table derived from our ICA2 Genespace assignment
+  (Danio_Campylomormyrus_1to1_orthologs_table.csv)
   - Note: degPatterns transforms the Campy gene names, make sure to
     change them back so they match with the orthology table
 - Complete a gene ontology analysis on the cluster of interest using the
@@ -252,7 +491,7 @@ the same pattern).
 
 Guidelines:
 
--  Figures should have a title and axes that are easy to read
+- Figures should have a title and axes that are easy to read
 
 - Have an accessible color scheme
 
