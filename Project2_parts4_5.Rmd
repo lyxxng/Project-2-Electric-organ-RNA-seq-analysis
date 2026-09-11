@@ -182,10 +182,11 @@ pheatmap(samplePoisDistMatrix,
          col = colors)
 ```
 
-The two heatmaps are measuring sample-to-sample distance. The fist is
-using Euclidean distance, and the second is using Poisson distance. Both
-plots seem to suggest that SRR25630366 may be an outlier, since it is
-not grouped with the correct tissue.
+The two heatmaps are measuring sample-to-sample distance. The first is
+using Euclidean distance and normalized data, and the second is using
+Poisson distance and unnormalized data. Both plots seem to suggest that
+SRR25630366 may be an outlier, since it is not grouped with the correct
+tissue.
 
 6.  Examine similarity in sample global gene expression using PCA,
     Generalized PCA, and MDS plots.
@@ -232,9 +233,10 @@ ggplot(mds, aes(x = `1`, y = `2`, color = Tissue, shape = SpeciesSmaller)) +
 These figures appear to reject the null hypothesis, since there is a
 clear distinction between the two tissue types, showing evidence that
 there is a difference in gene expression between the electric organ and
-skeletal muscle in the *Campylomormyrus* genus. In terms of the methods,
-I am curious why the authors did not hybridize Crh and Cts. I also
-recall from the JC presentation that one of their samples was old.
+skeletal muscle in the *Campylomormyrus* genus. Both methods (PCA and
+MDS) identify the same outlier. Moreover, PCA does not used normalized
+data and captures variance better, whereas MDS uses normalized data and
+preserves pairwise distances.
 
 7.  Use your dimensionality reduction plots, evaluate sample quality and
     complete quality adjustments.
